@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import OpenAI from 'openai'
 import { createClient } from '@supabase/supabase-js'
+import { env } from './utils/env'
 
 // Initialize Supabase client
 const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+  env.SUPABASE_URL,
+  env.SUPABASE_ANON_KEY
 )
 
 interface SavedTweet {
@@ -31,12 +32,177 @@ Format your response as follows:
 
 Here is the blog post:`
 
+// Basic styles as plain JavaScript objects to avoid Tailwind dependency issues
+const styles = {
+  container: {
+    fontFamily: 'Arial, sans-serif',
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: '20px',
+    position: 'relative' as const
+  },
+  mainContent: {
+    width: '100%',
+    maxWidth: '800px',
+    margin: '0 auto',
+    transition: 'all 0.3s ease'
+  },
+  mainContentWithSidebar: {
+    width: '100%',
+    maxWidth: '800px',
+    margin: '0 auto',
+    marginRight: '320px',
+    transition: 'all 0.3s ease'
+  },
+  sidebar: {
+    width: '300px',
+    backgroundColor: 'white',
+    boxShadow: '0 0 10px rgba(0,0,0,0.1)',
+    position: 'fixed' as const,
+    right: '0',
+    top: '0',
+    height: '100%',
+    overflowY: 'auto' as const,
+    zIndex: 1000
+  },
+  header: {
+    backgroundColor: '#1DA1F2',
+    color: 'white',
+    padding: '10px',
+    marginBottom: '15px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  title: {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    marginBottom: '10px',
+    textAlign: 'center' as const
+  },
+  inputArea: {
+    marginBottom: '20px'
+  },
+  textarea: {
+    width: '100%',
+    height: '150px',
+    padding: '10px',
+    marginBottom: '10px',
+    border: '1px solid #ccc',
+    borderRadius: '4px'
+  },
+  editTextarea: {
+    width: '100%',
+    height: '80px',
+    padding: '8px',
+    marginBottom: '8px',
+    border: '1px solid #1DA1F2',
+    borderRadius: '4px',
+    fontSize: '14px'
+  },
+  buttonRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '20px',
+    gap: '10px'
+  },
+  primaryButton: {
+    backgroundColor: '#1DA1F2',
+    color: 'white',
+    border: 'none',
+    padding: '10px 15px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    minWidth: '140px'
+  },
+  secondaryButton: {
+    backgroundColor: 'white',
+    color: '#1DA1F2',
+    border: '1px solid #1DA1F2',
+    padding: '10px 15px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    minWidth: '140px'
+  },
+  tweetCard: {
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e1e4e8',
+    borderRadius: '4px',
+    padding: '15px',
+    marginBottom: '15px'
+  },
+  tweetContent: {
+    marginBottom: '10px'
+  },
+  tweetActions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '10px'
+  },
+  tweetButton: {
+    backgroundColor: '#1DA1F2',
+    color: 'white',
+    border: 'none',
+    padding: '5px 10px',
+    borderRadius: '4px',
+    cursor: 'pointer'
+  },
+  saveButton: {
+    backgroundColor: '#6c757d',
+    color: 'white',
+    border: 'none',
+    padding: '5px 10px',
+    borderRadius: '4px',
+    cursor: 'pointer'
+  },
+  editButton: {
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    padding: '5px 10px',
+    borderRadius: '4px',
+    cursor: 'pointer'
+  },
+  deleteButton: {
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    padding: '5px 10px',
+    borderRadius: '4px',
+    cursor: 'pointer'
+  },
+  characterCount: {
+    display: 'inline-block',
+    padding: '3px 8px',
+    borderRadius: '10px',
+    fontSize: '12px',
+    backgroundColor: '#e2e3e5',
+    color: '#383d41'
+  },
+  footer: {
+    marginTop: '20px',
+    textAlign: 'center' as const,
+    color: '#6c757d',
+    fontSize: '14px'
+  },
+  editButtonsRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginTop: '8px',
+    gap: '5px'
+  }
+};
+
 function App() {
   const [inputText, setInputText] = useState('')
   const [outputText, setOutputText] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [savedTweets, setSavedTweets] = useState<SavedTweet[]>([])
   const [isSaving, setIsSaving] = useState(false)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [editTweetId, setEditTweetId] = useState<number | null>(null)
+  const [editTweetContent, setEditTweetContent] = useState('')
 
   // Fetch saved tweets on component mount
   useEffect(() => {
@@ -68,10 +234,46 @@ function App() {
 
       // Refresh the saved tweets list
       await fetchSavedTweets()
+      // Open sidebar to show newly saved tweet
+      setSidebarOpen(true)
     } catch (error) {
       console.error('Error saving tweet:', error)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleEditTweet = (tweet: SavedTweet) => {
+    setEditTweetId(tweet.id)
+    setEditTweetContent(tweet.content)
+  }
+
+  const handleCancelEdit = () => {
+    setEditTweetId(null)
+    setEditTweetContent('')
+  }
+
+  const handleUpdateTweet = async () => {
+    if (!editTweetId) return
+    
+    setIsUpdating(true)
+    try {
+      const { error } = await supabase
+        .from('saved_tweets')
+        .update({ content: editTweetContent })
+        .eq('id', editTweetId)
+
+      if (error) throw error
+
+      // Refresh the saved tweets list
+      await fetchSavedTweets()
+      // Exit edit mode
+      setEditTweetId(null)
+      setEditTweetContent('')
+    } catch (error) {
+      console.error('Error updating tweet:', error)
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -97,7 +299,7 @@ function App() {
     setIsLoading(true)
     try {
       const openai = new OpenAI({
-        apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+        apiKey: env.OPENAI_API_KEY,
         dangerouslyAllowBrowser: true
       })
 
@@ -146,97 +348,155 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="flex gap-6">
-        {/* Main content */}
-        <div className="flex-1 max-w-2xl">
-          <h1 className="text-[2.5rem] font-bold mb-2 text-[#1f2937]">
-            Content Remixer
-          </h1>
-          <p className="text-gray-700 mb-6">
-            Transform your content with AI-powered remixing
-          </p>
-          
-          <div className="mb-8">
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Paste your content here..."
-              className="w-full h-32 p-2 border border-gray-300 rounded mb-4 resize-none"
-            />
-            
+    <div style={styles.container}>
+      {/* Main content */}
+      <div style={sidebarOpen ? styles.mainContentWithSidebar : styles.mainContent}>
+        <h1 style={styles.title}>Content Remixer</h1>
+        <p style={{ textAlign: 'center', marginBottom: '20px' }}>Transform your blog posts into engaging tweets</p>
+        
+        {/* Input area */}
+        <div style={styles.inputArea}>
+          <textarea 
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Paste your content here..."
+            style={styles.textarea}
+          />
+          <div style={styles.buttonRow}>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={styles.secondaryButton}
+            >
+              {sidebarOpen ? "Hide Saved Tweets" : "Show Saved Tweets"}
+            </button>
             <button
               onClick={handleRemix}
-              disabled={isLoading || !inputText.trim()}
-              className="bg-blue-500 text-white px-4 py-2 rounded font-medium"
+              disabled={isLoading}
+              style={styles.primaryButton}
             >
-              {isLoading ? 'Remixing...' : 'Remix Content'}
+              {isLoading ? "Generating..." : "Generate Tweets"}
             </button>
           </div>
-
-          {outputText.length > 0 && (
+        </div>
+        
+        {/* Generated Tweets section */}
+        {outputText.length > 0 && (
+          <div>
+            <h2 style={{ ...styles.title, fontSize: '20px' }}>Generated Tweets</h2>
             <div>
-              <h2 className="text-xl font-bold mb-4 text-[#1f2937]">
-                Generated Tweets:
-              </h2>
-              <div className="space-y-6">
-                {outputText.map((tweet, index) => (
-                  <div key={index} className="space-y-2">
-                    <p className="text-gray-800">{tweet}</p>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-500">{getCharactersRemaining(tweet)} characters remaining</span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleTweetShare(tweet)}
-                          className="bg-white border border-gray-300 rounded px-3 py-1 hover:bg-gray-50"
-                        >
-                          Tweet
-                        </button>
-                        <button
-                          onClick={() => handleSaveTweet(tweet)}
-                          disabled={isSaving}
-                          className="bg-green-500 text-white rounded px-3 py-1 hover:bg-green-600 disabled:bg-green-300"
-                        >
-                          Save
-                        </button>
-                      </div>
+              {outputText.map((tweet, index) => (
+                <div key={index} style={styles.tweetCard}>
+                  <p style={styles.tweetContent}>{tweet}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={styles.characterCount}>
+                      {getCharactersRemaining(tweet)} characters remaining
+                    </span>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button
+                        onClick={() => handleSaveTweet(tweet)}
+                        disabled={isSaving}
+                        style={styles.saveButton}
+                      >
+                        {isSaving ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => handleTweetShare(tweet)}
+                        style={styles.tweetButton}
+                      >
+                        Tweet
+                      </button>
                     </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Footer */}
+        <div style={styles.footer}>
+          <p>Content Remixer - Made with ♥</p>
+        </div>
+      </div>
+
+      {/* Saved Tweets Sidebar */}
+      {sidebarOpen && (
+        <div style={styles.sidebar}>
+          <div style={styles.header}>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Saved Tweets</h2>
+            <button 
+              onClick={() => setSidebarOpen(false)}
+              style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+            >
+              Close
+            </button>
+          </div>
+          
+          <div>
+            {savedTweets.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic', marginTop: '20px' }}>No saved tweets yet</p>
+            ) : (
+              <div>
+                {savedTweets.map((tweet) => (
+                  <div key={tweet.id} style={{ ...styles.tweetCard, padding: '10px', marginBottom: '10px' }}>
+                    {editTweetId === tweet.id ? (
+                      <>
+                        <textarea
+                          value={editTweetContent}
+                          onChange={(e) => setEditTweetContent(e.target.value)}
+                          style={styles.editTextarea}
+                        />
+                        <div style={{ textAlign: 'right', fontSize: '12px', marginBottom: '8px' }}>
+                          {getCharactersRemaining(editTweetContent)} characters remaining
+                        </div>
+                        <div style={styles.editButtonsRow}>
+                          <button
+                            onClick={handleCancelEdit}
+                            style={{ ...styles.deleteButton, fontSize: '12px' }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleUpdateTweet}
+                            disabled={isUpdating}
+                            style={{ ...styles.editButton, fontSize: '12px' }}
+                          >
+                            {isUpdating ? "Saving..." : "Update"}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ ...styles.tweetContent, fontSize: '14px' }}>{tweet.content}</p>
+                        <div style={styles.tweetActions}>
+                          <button
+                            onClick={() => handleEditTweet(tweet)}
+                            style={{ ...styles.editButton, fontSize: '12px' }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleTweetShare(tweet.content)}
+                            style={{ ...styles.tweetButton, fontSize: '12px' }}
+                          >
+                            Tweet
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSavedTweet(tweet.id)}
+                            style={{ ...styles.deleteButton, fontSize: '12px' }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Saved tweets sidebar */}
-        <div className="w-80 bg-white border border-gray-200 rounded-lg p-4 h-[calc(100vh-3rem)] sticky top-6 overflow-y-auto">
-          <h2 className="text-lg font-bold mb-4 text-[#1f2937]">Saved Tweets</h2>
-          <div className="space-y-4">
-            {savedTweets.map((tweet) => (
-              <div key={tweet.id} className="p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-800 mb-2">{tweet.content}</p>
-                <div className="flex justify-between items-center">
-                  <button
-                    onClick={() => handleTweetShare(tweet.content)}
-                    className="text-sm text-blue-500 hover:text-blue-600"
-                  >
-                    Tweet
-                  </button>
-                  <button
-                    onClick={() => handleDeleteSavedTweet(tweet.id)}
-                    className="text-sm text-red-500 hover:text-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-            {savedTweets.length === 0 && (
-              <p className="text-sm text-gray-500 text-center">No saved tweets yet</p>
             )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
